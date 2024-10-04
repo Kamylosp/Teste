@@ -31,6 +31,7 @@
 ****************************************************************************/
 #ifndef MIROS_H
 #define MIROS_H
+#include <stdint.h>
 
 /* Thread Control Block (TCB) */
 typedef struct {
@@ -39,18 +40,6 @@ typedef struct {
     uint8_t prio; /* thread priority */
     /* ... other attributes associated with a thread */
 } OSThread;
-
-typedef struct {
-    int mut;
-}thread_mutex;
-
-typedef struct {
-    unsigned int sem;
-}sem;
-
-
-//typedef int *thread_mutex;
-//typedef unsigned int *sem;
 
 #define TICKS_PER_SEC 100U
 
@@ -76,23 +65,18 @@ void OS_tick(void);
 /* callback to configure and start interrupts */
 void OS_onStartup(void);
 
-/* inicializa mutex */
-void mutex_init(void *mut);
+/**/
+typedef struct {
+	unsigned int cont;
+	unsigned int max_cont;
+} sem_t;
 
-/* trava mutex */
-void mutex_lock(void *mut);
+void sem_init(sem_t *sem, int init_count, int max_count);
 
-/* destrava mutex */
-void mutex_unlock(void *mut);
+void sem_wait(sem_t *sem);
 
-/* inicializa semaforo */
-void sem_init(void *semaf, int tamanho);
-
-/* decrementa semaforo */
-void sem_wait(void *semaf);
-
-/* incrementa semaforo*/
-void sem_post(void *semaf);
+void sem_post(sem_t *sem);
+/**/
 
 void OSThread_start(
     OSThread *me,

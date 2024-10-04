@@ -1,92 +1,95 @@
 #include <stdint.h>
-#include <time.h>
 #include <stdlib.h>
+#include <time.h>
 #include "miros.h"
-#include "qassert.h"
-
-#define n_produtores 2
-#define n_consumidores 2
-
-int contador = 0, tamanho_max = 10;
-
-thread_mutex mutex;
-sem emp, full;
-
-uint8_t gera_delay(){
-	return ((rand() % 100) + 1);
-}
-
-typedef struct {
-    OSThread produ;
-    uint32_t stackProd[40];
-} prod;
-
-typedef struct {
-    OSThread consu;
-    uint32_t stackCons[40];
-} cons;
-
-prod produs[n_produtores];
-cons consum[n_consumidores];
-
-uint32_t stack_blinky1[40];
-OSThread blinky1;
-void produzir() {
-    while (1) {
-        sem_wait((void*)&emp);
-        OS_delay(gera_delay());
-        mutex_lock((void*)&mutex);
-        if(contador<10){
-        contador++;
-        }
-        mutex_unlock((void*)&mutex);
-        sem_post((void*)&full);
-    }
-}
-
-uint32_t stack_blinky2[40];
-OSThread blinky2;
-void consumir() {
-    while (1) {
-        sem_wait((void*)&full);
-        OS_delay(gera_delay());
-        mutex_lock((void*)&mutex);
-        if(contador>0){
-        contador--;
-        }
-        mutex_unlock((void*)&mutex);
-        sem_post((void*)&emp);
-    }
-}
 
 uint32_t stack_idleThread[40];
 
-int main()
-{
+const uint8_t BUFFER_SIZE = 64;
+
+const uint8_t NUM_P = 2;
+const uint8_t NUM_C = 1;
+const uint8_t empty_init = BUFFER_SIZE/2;
+const uint8_t full_init = 32;
+
+const uint32_t STACK_SIZE = 512U;
+
+typedef struct{
+	int buffer[64];
+	int count;
+} BufferFila;
+
+BufferFila fila;
+
+sem_t empty;
+sem_t full;
+sem_t mutex;
+
+void buffer_init(BufferFila *b){
+	b->count = full_init;
+}
+
+void buffer_add(BufferFila *b, int item){
+	b->buffer[b->count] = item;
+	b->count++;
+}
+
+void buffer_remove(BufferFila *b){
+	for(int i = 0; i < b->count-1; i++){
+		b->buffer[i] = b->buffer[i+1];
+	}
+	b->count--;
+}
+
+void produtor(){
+	while(1){
+		OS_delay((rand() % 100) + 1);
+		sem_wait(&empty);
+		sem_wait(&mutex);
+		buffer_add(&fila, 1);
+		sem_post(&mutex);
+		sem_post(&full);
+	}
+}
+
+void consumidor(){
+	while(1){
+		OS_delay((rand() % 100) + 1);
+		sem_wait(&full);
+		sem_wait(&mutex);
+		buffer_remove(&fila);
+		sem_post(&mutex);
+		sem_post(&empty);
+	}
+}
+
+int main() {
 	srand(time(NULL));
-    mutex_init((void*)&mutex);
-    sem_init((void*)&emp, tamanho_max);
-    sem_init((void*)&full, 0);
 
     OS_init(stack_idleThread, sizeof(stack_idleThread));
 
-    for (int i = 0; i < n_produtores; i++) {
-        OSThread_start(&(produs[i].produ),
-        			   (2*i+1),
-                       &produzir,
-                       produs[i].stackProd, sizeof(produs[i].stackProd));
-    }
+    buffer_init(&fila);
 
-    for (int i = 0; i < n_consumidores; i++) {
-        OSThread_start(&(consum[i].consu),
-        			   (2*i+2),
-                       &consumir,
-                       consum[i].stackCons, sizeof(consum[i].stackCons));
-    }
+    sem_init(&empty, empty_init, BUFFER_SIZE);
+    sem_init(&full, full_init, BUFFER_SIZE);
+    sem_init(&mutex, 1, 1);
 
-    /*sem_destroy(&emp);
-    sem_destroy(&full);
-    pthread_mutex_destroy(&mutex);*/
+    OSThread produtores[NUM_P];
+	OSThread consumidores[NUM_C];
+
+	uint32_t pstack[NUM_P][STACK_SIZE];
+	uint32_t cstack[NUM_C][STACK_SIZE];
+
+	for(int i = 0; i < NUM_P; i++){
+		OSThread_start(&(produtores[i]), (2*i+1), &produtor, pstack[i], sizeof(pstack[i]));
+	}
+
+	for(int i = 0; i < NUM_C; i++){
+		OSThread_start(&(consumidores[i]), (2*i+2), &consumidor, cstack[i], sizeof(cstack[i]));
+	}
+
+    /* transfer control to the RTOS to run the threads */
     OS_run();
+
     //return 0;
 }

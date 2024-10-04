@@ -33,6 +33,7 @@
 #include "miros.h"
 #include "qassert.h"
 #include "stm32f1xx.h"
+#include <assert.h>
 
 Q_DEFINE_THIS_FILE
 
@@ -134,67 +135,31 @@ void OS_delay(uint32_t ticks) {
     __asm volatile ("cpsie i");
 }
 
-void mutex_init(void *mut){
-    Q_ASSERT(mut);
-    thread_mutex *mu = (thread_mutex *)mut;
-    mu->mut = 0;
+/*DEFINIÇÃO DOS SEMÁFOROS*/
+
+void sem_init(sem_t *sem, int init_count, int max_count){
+	assert(init_count <= max_count);
+	sem->cont = init_count;
+	sem->max_cont =max_count;
 }
 
-void mutex_lock(void *mut){
-    //thread_mutex *mu = (thread_mutex *)mut;
-    Q_ASSERT(mut);
-    __disable_irq();
-    thread_mutex *mu = (thread_mutex *)mut;
-    while (mu->mut == 1){
-    	OS_delay(1);
-    	__disable_irq();
-    }
-   // __disable_irq();
-    if(mu->mut == 0){
-        mu->mut = 1;
-    }
-    __enable_irq();
+void sem_wait(sem_t *sem){
+	__disable_irq();
+		while(sem->cont == 0){
+			OS_delay(1U);
+			__disable_irq();
+		}
+		sem->cont--;
 }
 
-void mutex_unlock(void *mut){
-    //thread_mutex *mu = (thread_mutex *)mut;
-    Q_ASSERT(mut);
-    __disable_irq();
-    thread_mutex *mu = (thread_mutex *)mut;
-    if(mu->mut == 1){
-        mu->mut = 0;
-    }
-    __enable_irq();
+void sem_post(sem_t *sem){
+	__disable_irq();
+	if(sem->cont < sem->max_cont){
+		sem->cont++;
+	}
+	__enable_irq();
 }
-
-void sem_init(void *semaf, int tamanho){
-    Q_ASSERT(semaf);
-    sem *se = (sem *)semaf;
-    se->sem = tamanho;
-}
-
-void sem_wait(void *semaf){
-    //sem *se = (sem *)semaf;
-    Q_ASSERT(semaf);
-    __disable_irq();
-    sem *se = (sem *)semaf;
-    while(se->sem == 0){
-        OS_delay(1);
-        __disable_irq();
-    }
-   // __disable_irq();
-    se->sem--;
-    __enable_irq();
-}
-
-void sem_post(void *semaf){
-    //sem *se = (sem *)semaf;
-    Q_ASSERT(semaf);
-    __disable_irq();
-    sem *se = (sem *)semaf;
-    se->sem++;
-    __enable_irq();
-}
+/*FIM DA DEFINIÇÃO DOS SEMÁFOROS*/
 
 void OSThread_start(
     OSThread *me,
